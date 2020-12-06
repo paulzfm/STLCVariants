@@ -1,0 +1,397 @@
+\documentclass[11pt]{article}
+
+% style
+\usepackage[a4paper,left=2.5cm,right=2.5cm,top=2.5cm,bottom=2.5cm]{geometry}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage[capitalise]{cleveref}
+
+\usepackage{amsthm}
+\newtheorem{lemma}{Lemma}
+\newtheorem{theorem}{Theorem}
+\newtheorem{corollary}{Corollary}
+
+\usepackage[inference]{semantic} % for writing inference rules
+\setnamespace{0pt}
+
+\usepackage{enumitem}
+\setlist{nolistsep}
+
+\usepackage{empheq}
+\newcommand{\boxedeq}[1]{\begin{empheq}[box=\fbox]{align*}#1\end{empheq}}
+
+\let\t\texttt
+\let\emptyset\varnothing
+\let\to\rightarrow
+\let\reduce\Rightarrow
+\newcommand{\reduceM}{\Rightarrow^{*}}
+\let\defas\triangleq
+\newcommand{\Bool}{\t{Bool}}
+\newcommand{\Some}[1]{\textsf{Some}(#1)}
+\newcommand{\None}{\textsf{None}}
+\newcommand{\kword}[1]{{\color{blue} \textsf{#1}}}
+\newcommand{\True}{\kword{true}}
+\newcommand{\False}{\kword{false}}
+\newcommand{\If}{\kword{if}}
+\newcommand{\Then}{\kword{then}}
+\newcommand{\Else}{\kword{else}}
+
+\title{\textbf{On the Meta Theory of Two STLC Variants}}
+\author{Paul Zhu}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+The \emph{simply typed lambda-calculus} (STLC, denoted by $\lambda_\to$) is a tiny core calculus for functional abstraction, embodying a simplest type system.
+In this article, we are going to study the meta theory (more specifically, the type preservation property) of two STLC variants.
+The original problem is exercise \t{stlc\_variation7} of this chapter of \emph{Software Foundations}:
+\begin{center}
+    \url{https://softwarefoundations.cis.upenn.edu/plf-current/StlcProp.html}.    
+\end{center}
+Formal proofs mechanized in Coq can be found here:
+\begin{center}
+    \url{https://gist.github.com/paulzfm/b11a1262af00a60974f1bd70f24d008d}.
+\end{center}
+
+\section{The System}
+
+Let's consider a STLC on Booleans, namely $\lambda_\to^{\Bool}$.
+Syntax definition:
+\begin{align*}
+    \text{Term}~t &::= x & \text{(variable)} \\
+    &\mid (t_1~t_2) & \text{($\lambda$-application)} \\
+    &\mid (\lambda x:T.t) & \text{($\lambda$-abstraction)} \\
+    &\mid \True & \text{(Boolean value true)} \\
+    &\mid \False & \text{(Boolean value false)} \\
+    &\mid (\If~t_1~\Then~t_2~\Else~t_3) & \text{(if-expression)} \\
+    \text{(Simple) type}~T &::= \Bool & \text{(Boolean type is the only base type)} \\
+    &\mid T_1\to T_2 & \text{(arrow type)}
+\end{align*}
+
+Notice that here we add three kinds of terms related to Booleans: Boolean value true, Boolean value false and if-expression.
+Moreover, $\Bool$ is the sole base type in $\lambda_\to^{\Bool}$.
+Typing rules for Booleans (other rules are standard):
+\begin{align*}
+    & \inference[T-True]{}{\Gamma \vdash \True:\Bool} \\
+    & \inference[T-False]{}{\Gamma \vdash \False:\Bool} \\
+    & \inference[T-If]{\Gamma \vdash t_1:\Bool & \Gamma \vdash t_2:T & \Gamma \vdash t_3:T}{\Gamma \vdash (\If~t_1~\Then~t_2~\Else~t_3):T}
+\end{align*}
+
+Evaluation rules for if-expression (other rules are standard):
+\begin{align*}
+    &\inference[E-If]{t_1 \reduce t_1'}{(\If~t_1~\Then~t_2~\Else~t_3) \reduce (\If~t_1'~\Then~t_2~\Else~t_3)} \\
+    &\inference[E-IfTrue]{}{(\If~\True~\Then~t_2~\Else~t_3) \reduce t_2} \\
+    &\inference[E-IfFalse]{}{(\If~\False~\Then~t_2~\Else~t_3) \reduce t_3}
+\end{align*}
+
+\section{Problem Statement}
+
+Recall that the \emph{type preservation property} says, if $\vdash t:T$ and $t \reduce t'$, then $\vdash t':T$.
+
+\paragraph{Q1}
+
+Based upon the system $\lambda_\to^{\Bool}$, we add a funny typing rule
+$$
+    \inference[T-FunnyAbs]{}{\vdash (\lambda x:\Bool.t) : \Bool}
+$$
+and call it extended system (A).
+Does the type preservation property holds for extended system (A)?
+
+\paragraph{Q2}
+
+Alternatively, suppose we change the funny typing rule into (since $\Gamma$ is a \emph{meta-variable}, it is regarded as arbitrary)
+$$
+    \inference[T-FunnyAbs']{}{\Gamma \vdash (\lambda x:\Bool.t) : \Bool}
+$$
+and call it extended system (B).
+Does the type preservation property holds for extended system (B)?
+
+\paragraph{Remark} Before looking at the answers (on the continuing pages), I strongly recommend you to think about the two questions yourself and make a smart guess.
+
+\newpage
+
+\section{Answer to Q1}
+
+As you may guess, the type preservation property does \textbf{not} hold. Let's see a counterexample.
+Given terms
+\begin{align*}
+    t &\defas (\lambda x:\Bool.\lambda y:\Bool.x)~(\lambda x:\Bool.z) \\
+    t' &\defas \lambda y:\Bool.\lambda x:\Bool.z
+\end{align*}
+We see that $\vdash t: \Bool\to\Bool$ and $t \reduce t'$.
+However, $t'$ is not typable under empty context, since the rule T-FunnyAbs is \textbf{only} applicable when the typing context is \textbf{empty}.
+But in typing $t'$, the subterm $\lambda x:\Bool.z$ is typing under $\emptyset,y:\Bool$, which is nonempty.
+
+Some of you may raise other ``counterexamples'', which are in fact wrong.
+For instance, one may construct the following two terms
+\begin{align*}
+    t &\defas (\lambda x:\Bool.\lambda y:\Bool.x)~\True \\
+    t' &\defas \lambda y:\Bool.\True
+\end{align*}
+which makes $\vdash t: \Bool\to\Bool$ and $t \reduce t'$ hold.
+Then, the student say, well, since $\vdash t': \Bool$ by the rule T-FunnyAbs, and of course $\Bool$ differs from $\Bool\to\Bool$, then the preservation property violates.
+If you read the explain twice, you will soon see this is in fact not a valid counterexample!
+Using the normal typing rules, we could easily show that $\vdash t': \Bool\to\Bool$, meaning the type of $t'$ is preserved.
+In general, a valid counterexample for the preservation property must point out, (1) either $t'$ is ill-typed, or (2) $t'$ \textbf{cannot} have the original type, rather than it \textbf{can} have another type.
+
+\section{Answer to Q2}
+
+Note that the funny typing rule is now applicable under \textbf{any} typing context $\Gamma$.
+We realize the above counterexample could \textbf{not} demonstrate the invalidness of the preservation property.
+We will see that the property holds for this extended system.
+To show this, let's first review the proof techniques for the original system.
+
+\subsection{Preservation of the Original System}
+
+Recall that in the original system, $\True$, $\False$ and abstractions are \emph{values}.
+We write $val(t)$ to denote a term $t$ is a value.
+We specify the following evaluation rules, expressed in the style of small-step operational semantics:
+\begin{align*}
+    &\inference[E-App1]{t_1 \reduce t_1'}{t_1~t_2 \reduce t_1'~t_2}
+    &\inference[E-App2]{val(v_1) & t_2 \reduce t_2'}{v_1~t_2 \reduce v_1~t_2'} \\
+    &\inference[E-$\beta$]{val(v)}{(\lambda x:T.t)~v \reduce t[x:=v]} \\
+    &\inference[E-If]{t_1 \reduce t_1'}{(\If~t_1~\Then~t_2~\Else~t_3) \reduce (\If~t_1'~\Then~t_2~\Else~t_3)} \\
+    &\inference[E-IfTrue]{}{(\If~\True~\Then~t_2~\Else~t_3) \reduce t_2} \\
+    &\inference[E-IfFalse]{}{(\If~\False~\Then~t_2~\Else~t_3) \reduce t_3}
+\end{align*}
+
+In the $\beta$-reduction rule E-$\beta$, the substitution operation $t[x:=s]$, meaning substituting a term $s$ for a variable $x$ in a term $t$, is inductively defined as follows:
+\begin{align*}
+    x[x:=s] &= s \\
+    y[x:=s] &= y & \text{if}~x\not=y \\
+    (\lambda x:T.t)[x:=s] &= \lambda x:T.t \\
+    (\lambda y:T.t)[x:=s] &= \lambda y:T.(t[x:=s]) & \text{if}~x\not=y \\
+    (t_1~t_2)[x:=s] &= (t_1[x:=s]~t_2[x:=s]) \\
+    \True[x:=s] &= \True \\
+    \False[x:=s] &= \False \\
+    (\If~t_1~\Then~t_2~\Else~t_3)[x:=s] &= \If~t_1[x:=s]~\Then~t_2[x:=s]~\Else~t_3[x:=s]
+\end{align*}
+
+By the way, we denote the set of \emph{free variables} of the term $t$ as $FV(t)$, inductively defined as follows:
+\begin{align*}
+    FV(x) &= \{x\} \\
+    FV(t_1~t_2) &= FV(t_1) \cup FV(t_2) \\
+    FV(\lambda x:T.t) &= FV(t) \setminus \{x\} \\
+    FV(\True) &= \emptyset \\
+    FV(\False) &= \emptyset \\
+    FV(\If~t_1~\Then~t_2~\Else~t_3) &= FV(t_1) \cup FV(t_2) \cup FV(t_3)
+\end{align*}
+A term is \emph{closed} if it contains no free variables. Otherwise, it is \emph{open}.
+
+A \emph{typing context} consists of a sequence of bindings mapping variables to their types, inductively defined as
+$$\Gamma ::= \emptyset \mid \Gamma,x:T$$
+We implement it as a \emph{partial map} from variables to \emph{optional types} (in Haskell, the \t{Maybe} monad) -- either $\None$ for nothing, or $\Some{T}$ for type $T$.
+As a convention, we write $x \not\in dom(\Gamma)$ if $\Gamma(x)=\None$, and use the substitution notion $\Gamma[x:=T]$ for a context update $\Gamma,x:T$.
+Typing rules are given as the following:
+\begin{align*}
+    & \inference[T-Var]{\Gamma(x)=\Some{T}}{\Gamma \vdash x:T}
+    & \inference[T-Abs]{\Gamma,x:T \vdash t:T'}{\Gamma \vdash (\lambda x:T.t):T \to T'} \\
+    & \inference[T-App]{\Gamma \vdash t_1:T \to T' & \Gamma \vdash t_2:T}{\Gamma \vdash (t_1~t_2):T'} \\
+    & \inference[T-True]{}{\Gamma \vdash \True:\Bool}
+    & \inference[T-False]{}{\Gamma \vdash \False:\Bool} \\
+    & \inference[T-If]{\Gamma \vdash t_1:\Bool & \Gamma \vdash t_2:T & \Gamma \vdash t_3:T}{\Gamma \vdash (\If~t_1~\Then~t_2~\Else~t_3):T}
+\end{align*}
+A term $t$ is \emph{well-typed} if it is typable under the empty typing context, i.e., $\vdash t:T$ for some type $T$.
+Otherwise, it is \emph{ill-typed}.
+
+So far, we have set up all the required notations.
+To show the type preservation theorem, we will need to develop some technical machinery for reasoning about variables
+and substitution.
+Working from top to bottom (from the high-level property we are actually interested in to the lowest-level technical lemmas that are needed by various cases of the more interesting proofs), the story goes like this:
+\begin{itemize}
+    \item The \emph{preservation theorem} is proved by induction on a typing derivation.
+    The one case that is significantly different is the one for the $\beta$-reduction rule, whose definition uses the substitution operation. 
+    To see that this step preserves typing, we need to know that the substitution itself does. So we prove a \ldots
+    \item \emph{substitution lemma}, stating that substituting a (closed) term $s$ for a variable $x$ in a term $t$ preserves the type of $t$.
+    The proof goes by induction on the form of $t$ and requires looking at all the different cases in the definition of substitution.
+    This time, the tricky cases are the ones for variables and for abstractions. 
+    In both, we discover that we need to take a term $s$ that has been shown to be well-typed in some context $\Gamma$ and consider the same term $s$ in a slightly different context $\Gamma'$.  For this we prove a \ldots
+    \item \emph{context invariance} lemma, showing that typing is preserved under ``inessential changes'' to the context $\Gamma$ -- in particular, changes that do not affect any of the free variables of the term.
+\end{itemize}
+
+To make both Coq and mathematicians happy, we have to start from the bottom and reach the top step by step.
+First of all, let's formalize and show the context invariance lemma:
+\begin{lemma}\label{thm:ori:inv}
+    (Context invariance) Suppose (1) $\Gamma \vdash t:T$, and (2) for every $x\in FV(t)$, $\Gamma(x)=\Gamma'(x)$, then $\Gamma' \vdash t:T$.
+\end{lemma}
+\begin{proof}
+    By induction on the typing judgment $\Gamma \vdash t:T$.
+    \begin{itemize}
+        \item For the T-Var case $\Gamma \vdash x:T$, we have $\Gamma(x)=\Some{T}$.
+        Since $x \in FV(x)$, we must also have $\Gamma(x) = \Gamma'(x)$, which implies $\Gamma'(x)=\Some{T}$,
+        and thus $\Gamma' \vdash x:T$ holds by an application of T-Var.
+        \item For the T-Abs case $\Gamma \vdash (\lambda x:U.t):U \to T$, we have $\Gamma,x:U \vdash t:T$.
+        Notice that $FV(\lambda x:U.t)=FV(t) \setminus \{x\}$.
+        Since $\Gamma(y)=\Gamma'(y)$ for every $y\in FV(\lambda x:U.t)$, 
+        \begin{equation}\label{eq:inv}
+            (\Gamma,x:U)(y)=(\Gamma',x:U)(y)    
+        \end{equation}
+        holds for every $y\in FV(t)$ whenever $y \not=x$.
+        Even when $y = x$, it is trivially seen that \cref{eq:inv} still holds.
+        Thus by inductive hypothesis, we have $\Gamma',x:U \vdash t:T$, which implies that $\Gamma' \vdash (\lambda x:U.t): U \to T$ by an application of T-Abs.
+        \item For the T-App case $\Gamma \vdash (t_1~t_2):T$, we know that $\Gamma \vdash t_1:T_1 \to T$ for some $T_1$ and $\Gamma \vdash t_2:T_1$.
+        Notice that $FV(t_1~t_2)=FV(t_1) \cup FV(t_2)$.
+        We see that $\Gamma(y)=\Gamma'(y)$ for every $y \in FV(t_1)$ and every $y \in FV(t_2)$.
+        Thus by inductive hypothesis, we have $\Gamma' \vdash t_1:T_1 \to T$, as well as $\Gamma' \vdash t_2:T_1$, which imply that $\Gamma' \vdash (t_1~t_2): T$ by an application of T-App.
+        \item The cases for T-True and T-False are immediate, as their typing judgments hold under any typing context.
+        \item Finally, the T-If case is similar to the T-App case, except the inductive hypothesis needs be used three times, once for each of the three premises of T-If.
+    \end{itemize}
+\end{proof}
+
+Before we move to a useful corollary of \cref{thm:ori:inv}, let's first show a simple fact -- well-typed terms must be closed, as stated in the following lemma:
+\begin{lemma}\label{thm:ori:closed}
+    (Well-typed terms are closed) If $\vdash t:T$, then $FV(t)=\emptyset$.
+\end{lemma}
+\begin{proof}
+    We first show that if $\Gamma \vdash t:T$, then for every $x \in FV(t)$, $x \in dom(\Gamma)$,
+    by induction on the typing judgment $\Gamma \vdash t:T$:
+    \begin{itemize}
+        \item For the T-Var case $\Gamma \vdash x:T$, we have $\Gamma(x)=\Some{T}$.
+        Since $FV(x)=\{x\}$, the conclusion holds.
+        \item For the T-Abs case $\Gamma \vdash (\lambda x:U.t'):U \to T'$, we have $\Gamma,x:U \vdash t':T'$.
+        For every $y \in FV(t) = FV(t') \setminus \{x\}$, we know $y \in FV(t')$ and thus $y \in dom(\Gamma,x:U)$ by inductive hypothesis.
+        Moreover, since $y \not=x$, we must have $y \in dom(\Gamma)$.
+        \item For the T-App case $\Gamma \vdash (t_1~t_2):T$, we have $\Gamma \vdash t_1:T_1 \to T$ for some $T_1$ and $\Gamma \vdash t_2:T_1$.
+        For every $y \in FV(t)$, i.e., $y \in FV(t_1)$ or $y \in FV(t_2)$, in either case, we could conclude that $y \in dom(\Gamma)$ by inductive hypothesis.
+        \item For the T-True and T-False cases, $FV(t)=\emptyset$ by definition and thus the conclusion trivially holds.
+        \item For the T-If case $\vdash (\If~t_1~\Then~t_2~\Else~t_3):T$, we have $\vdash t_1:\Bool$, $\vdash t_2:T$ and $\vdash t_3:T$.
+        For every $y \in FV(t)$, i.e., $y \in FV(t_1)$ or $y \in FV(t_2)$ or $y \in FV(t_3)$, in either case, we could conclude that $y \in dom(\Gamma)$ by inductive hypothesis.
+    \end{itemize}
+    Now, let $t$ be a well-typed term, and suppose there exists some variable $x\in FV(t)$, then according to the above, $x \in dom(\emptyset)$, which is a contradiction!
+    Therefore, it must be the case that $FV(t)=\emptyset$.
+\end{proof}
+
+Now, we state the corollary of \cref{thm:ori:inv}, which says, a well-typed term is typable under whatever typing context, and the typing is unique:
+\begin{corollary}\label{thm:ori:inv-coro}
+    If $\vdash t:T$, then $\Gamma \vdash t:T$ for any $\Gamma$.
+\end{corollary}
+\begin{proof}
+    In \cref{thm:ori:inv}, pick $\Gamma$ as $\emptyset$ and leave $\Gamma'$ arbitrary.
+    Apparently, we have $\vdash t:T$. By \cref{thm:ori:closed}, $FV(t)=\emptyset$.
+    Thus, condition (2) of \cref{thm:ori:inv} holds forever.
+    By \cref{thm:ori:inv}, we conclude that $\Gamma' \vdash t:T$ for any $\Gamma'$.
+\end{proof}
+
+Next, we come to the substitution lemma, which says substituting a closed term $s$ for a variable $x$ in a term $t$ preserves the type of $t$:
+\begin{lemma}\label{thm:ori:subst}
+    (Substitution preserves typing) If $\Gamma,x:U \vdash t:T$ and $\vdash s:U$, then $$\Gamma \vdash t[x:=s]:T.$$
+\end{lemma}
+\begin{proof}
+    By induction on the form of the term $t$.
+    \begin{itemize}
+        \item Case $t$ is a variable, say $y$.
+        \begin{itemize}
+            \item Suppose that $y=x$. By inversion on $\Gamma,x:U \vdash x:T$, we have $U=T$ and thus $\vdash s:T$.
+            By \cref{thm:ori:inv-coro}, we have
+            $$\Gamma \vdash s:T.$$
+            The above is indeed what we need to show, once we realize that $x[x:=s]=s$.
+            \item Otherwise, $y\not=x$.
+            By inversion on $\Gamma,x:U \vdash y:T$, we have $\Gamma(y)=\Some{T}$, which implies
+            $$\Gamma \vdash y:T$$
+            by an application of T-Var.
+            The above is indeed what we need to show, once we realize that $y[x:=s]=y$.
+        \end{itemize}
+        \item Case $t$ is an abstraction, say $(\lambda y:S.t')$.
+        By inversion on $\Gamma,x:U \vdash (\lambda y:S.t'):T$, we have
+        \begin{equation}\label{eq:abs:H}
+            \Gamma,x:U,y:S \vdash t':T'
+        \end{equation}
+        such that $T=S \to T'$.
+        \begin{itemize}
+            \item Suppose that $y=x$. \cref{eq:abs:H} is simply
+            $$\Gamma,x:S \vdash t':T'.$$
+            By an application of T-Abs, $$\Gamma \vdash (\lambda x:S.t'):S \to T'.$$
+            The above is indeed what we need to show, once we realize that $(\lambda x:S.t')[x:=s]=\lambda x:S.t'$.
+            \item Otherwise, $y\not=x$. \cref{eq:abs:H} is simply
+            $$\Gamma,y:S,x:U \vdash t':T'.$$
+            By inductive hypothesis, $$\Gamma,y:S \vdash t'[x:=s]:T'.$$
+            By an application of T-Abs, $$\Gamma \vdash \lambda y:S.(t'[x:=s]):S \to T'.$$
+            The above is indeed what we need to show, once we realize that $(\lambda y:S.t')[x:=s]=\lambda y:S.(t'[x:=s])$.
+        \end{itemize}
+        \item Case $t$ is an application, say $(t_1~t_2)$.
+        By inversion on $\Gamma,x:U \vdash (t_1~t_2):T$, we have
+        $$\Gamma,x:U \vdash t_1:U' \to T~\text{and}~\Gamma,x:U \vdash t_2:U'$$
+        for some $U'$.
+        By inductive hypothesis, $$\Gamma \vdash t_1[x:=s]:U' \to T~\text{and}~\Gamma \vdash t_2[x:=s]:U',$$
+        which imply $$\Gamma \vdash t_1[x:=s]~t_2[x:=s]:T$$
+        by an application of T-App.
+        The above is indeed what we need to show, once we realize that $(t_1~t_2)[x:=s]=t_1[x:=s]~t_2[x:=s]$.
+        \item Case $t$ is $\True$ or $\False$, no substitution is really happened and thus the conclusion trivially holds.
+        \item Finally, case $t$ is an if-expression, the situation is quite similar to the application case, except that the inductive hypothesis needs be used three times, once for each of the three premises of T-If.
+    \end{itemize}
+\end{proof}
+
+Ladies and gentlemen, finally comes our type preservation theorem!
+\begin{theorem}\label{thm:ori:main}
+    (Preservation) If $\vdash t:T$ and $t \reduce t'$, then $\vdash t':T$.
+\end{theorem}
+\begin{proof}
+    By induction on the typing judgment $\vdash t:T$.
+    We should omit the cases for T-Abs, T-True and T-False, where the term $t$ is already a value.
+    \begin{itemize}
+        \item The T-Var case $\vdash x:T$ is impossible, as $x \not\in dom(\emptyset)$ for any $x$.
+        \item For the T-App case $\vdash (t_1~t_2):T$, we have $\vdash t_1:T_1 \to T$ for some $T_1$ and $\vdash t_2:T_1$.
+        We now make an inversion on the evaluation relation $t \reduce t'$. Only three rules are applicable:
+        \begin{itemize}
+            \item Case E-$\beta$.
+            The term $t_1$ must be in form $\lambda x:T_1.t_3$, such that $\emptyset,x:T_1 \vdash t_3:T$,
+            and $t'=t_3[x:=t_2]$.
+            By \cref{thm:ori:subst} (let $\Gamma$ be $\emptyset$), $\vdash t_3[x:=t_2]:T$, i.e., $\vdash t':T$.
+            \item Case E-App1. We have $t_1 \reduce t_1'$ and $t_1~t_2 \reduce t_1'~t_2$.
+            By inductive hypothesis, $\vdash t_1':T_1 \to T$.
+            Since $\vdash t_2:T_1$, by an application of T-App, $\vdash (t_1'~t_2):T$.
+            \item Case E-App2. Similar to case E-App1.
+        \end{itemize}
+        \item For the T-If case $\vdash (\If~t_1~\Then~t_2~\Else~t_3):T$, we have $\vdash t_1:\Bool$, $\vdash t_2:T$ and $\vdash t_3:T$.
+        Again, we make an inversion on the evaluation relation $t \reduce t'$.
+        All three cases are similar to case E-App1.
+    \end{itemize}
+\end{proof}
+
+\subsection{Preservation of the Extended System}
+
+We now move onto the proof for extended system (B). Recall that we have one more funny typing rule:
+$$
+    \inference[T-FunnyAbs']{}{\Gamma \vdash (\lambda x:\Bool.t) : \Bool}
+$$
+
+If we copy all the previous proof mechanism, we will soon realize that \cref{thm:ori:closed} does not hold anymore!
+As a counterexample, the originally open (not closed) term $\lambda x:\Bool.y$ is now well-typed, thanks to its ``argument'' having type \Bool.
+However, \cref{thm:ori:inv-coro} still holds for the extended system.
+We convince ourselves by the following intuition: suppose that $\vdash t:T$.
+If $t$ is a closed term, then obviously $\Gamma \vdash t:T$ holds for any typing context $\Gamma$.
+Otherwise, in typing the term $t$, the funny typing rule T-FunnyAbs' must have been applied.
+Since this rule does not depend on types of free variables -- it only requires the bound variable to be a boolean -- we see that $\Gamma \vdash t:T$ still holds for any $\Gamma$.
+
+To show the corollary, we need another form of the context invariance lemma.
+The original form (\cref{thm:ori:inv-coro}) is in fact too ``strict'' for the extended system.
+To make $\Gamma' \vdash t:T$ derivable from $\Gamma \vdash t:T$, we only require the free variables of $t$ that appears in $\Gamma$ to have the identical type in $\Gamma'$.
+For those that does not appear in $\Gamma$, they could be whatever in $\Gamma'$, since they are unused in typing $t$ under $\Gamma'$. Formally,
+\begin{lemma}\label{thm:ext:inv}
+    (Context invariance) Suppose that (1) $\Gamma \vdash t:T$, and (2) for every $x\in FV(t)$ such that $x\in dom(\Gamma)$, $\Gamma(x)=\Gamma'(x)$, then $\Gamma' \vdash t:T$.
+\end{lemma}
+\begin{proof}
+    By induction on the typing judgment $\Gamma \vdash t:T$.
+    The original six cases all carry over here.
+    The T-FunnyAbs' case is also immediate, as the typing judgment holds under any typing context.
+\end{proof}
+
+Now the wanted corollary is immediate:
+\begin{corollary}\label{thm:ext:inv-coro}
+    If $\vdash t:T$, then $\Gamma \vdash t:T$ for any $\Gamma$.
+\end{corollary}
+\begin{proof}
+    In \cref{thm:ext:inv}, pick $\Gamma$ as $\emptyset$ and leave $\Gamma'$ arbitrary.
+    Apparently, condition (2) of \cref{thm:ext:inv} holds forever, as $dom(\emptyset)=\emptyset$.
+    By \cref{thm:ext:inv}, we conclude that $\Gamma' \vdash t:T$ for any $\Gamma'$.
+\end{proof}
+
+The proof of \cref{thm:ori:subst} and \cref{thm:ori:main} all carry over here, with the help of \cref{thm:ext:inv-coro}.
+To sum up, type preservation theorem still holds for extended system (B).
+
+\end{document}
